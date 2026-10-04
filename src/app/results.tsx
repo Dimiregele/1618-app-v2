@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { supabase } from "@/lib/supabase";
+import { speak, stopSpeaking } from "@/lib/voice";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Button } from "@/components/Button";
 import { color, space, type } from "@/theme";
@@ -41,10 +43,19 @@ export default function Results() {
           .eq("scan_id", scanId)
           .order("priority", { ascending: true }),
       ]);
-      setIssues((issuesData as unknown as IssueRow[]) ?? []);
+      const loadedIssues = (issuesData as unknown as IssueRow[]) ?? [];
+      setIssues(loadedIssues);
       setRecommendations((recsData as unknown as RecRow[]) ?? []);
       setLoading(false);
+
+      const names = loadedIssues.map((i) => i.category?.display_name?.ro ?? i.issue_slug);
+      speak(
+        names.length === 0
+          ? "Nu am găsit nimic clar vizibil în scanare. Poți repeta scanarea cu lumină mai bună."
+          : `Am găsit ${names.length} ${names.length === 1 ? "zonă de îmbunătățit" : "zone de îmbunătățit"}: ${names.join(", ")}. Mai jos vezi produsele recomandate pentru fiecare.`,
+      );
     })();
+    return () => stopSpeaking();
   }, [scanId]);
 
   if (loading) {
@@ -67,11 +78,11 @@ export default function Results() {
         </View>
       ) : (
         <View style={styles.list}>
-          {issues.map((item) => (
-            <View key={item.id} style={styles.issueRow}>
+          {issues.map((item, i) => (
+            <Animated.View key={item.id} entering={FadeInDown.delay(i * 90).duration(380)} style={styles.issueRow}>
               <Text style={type.h2}>{item.category?.display_name?.ro ?? item.issue_slug}</Text>
               <Text style={styles.severity}>{Math.round(item.severity)}</Text>
-            </View>
+            </Animated.View>
           ))}
         </View>
       )}
@@ -85,11 +96,11 @@ export default function Results() {
         </View>
       ) : (
         <View style={styles.list}>
-          {recommendations.map((item) => (
-            <View key={item.id} style={styles.productRow}>
+          {recommendations.map((item, i) => (
+            <Animated.View key={item.id} entering={FadeInDown.delay(300 + i * 90).duration(380)} style={styles.productRow}>
               <Text style={type.body}>{item.product?.name ?? "Produs"}</Text>
               {item.is_optional && <Text style={type.bodyMuted}>opțional</Text>}
-            </View>
+            </Animated.View>
           ))}
         </View>
       )}
