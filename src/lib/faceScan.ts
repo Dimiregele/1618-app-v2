@@ -24,7 +24,16 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   error_exceed_max_image_size: "Poza are rezoluție prea mare.",
 };
 
+const SESSION_EXPIRED = "Nu ești autentificat sau sesiunea a expirat. Intră din nou în cont și repetă scanarea.";
+
 async function runEdgeScan(photoUri: string): Promise<ScanOutcome> {
+  // Edge Function-ul cere un token de utilizator. Fără sesiune, invoke() trimite doar cheia anon
+  // și funcția răspunde „unauthorized” — mai bine spunem clar de ce.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error(SESSION_EXPIRED);
+
   const form = new FormData();
 
   if (Platform.OS === "web") {
@@ -52,6 +61,7 @@ async function runEdgeScan(photoUri: string): Promise<ScanOutcome> {
     } catch {
       /* corp non-JSON */
     }
+    if (message === "unauthorized") message = SESSION_EXPIRED;
     const friendly = (code && FRIENDLY_ERRORS[code]) || message;
     console.error("scan-face a eșuat:", { code, message }); // vizibil în DevTools (F12) indiferent de Alert
     throw new Error(friendly);

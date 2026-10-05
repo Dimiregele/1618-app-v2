@@ -22,6 +22,16 @@ export default function Signup() {
       Alert.alert("Nu am reușit să creăm contul", error?.message ?? "Eroare necunoscută");
       return;
     }
+    // Fără sesiune = contul există deja (signUp întoarce atunci un user „fals”) sau Supabase
+    // cere confirmarea emailului. În ambele cazuri nu avem token, iar scanarea ar eșua cu „unauthorized”.
+    if (!data.session) {
+      Alert.alert(
+        "Verifică emailul sau intră în cont",
+        "Dacă adresa e nouă, ți-am trimis un link de confirmare. Dacă ai deja cont, intră cu parola ta.",
+      );
+      router.replace("/(auth)/login");
+      return;
+    }
     // Rândul din `profiles` se creează automat printr-un trigger Postgres pe
     // auth.users (migrarea auto_create_profile_on_signup) — nu inserăm manual aici.
     router.replace("/(onboarding)/scan");
