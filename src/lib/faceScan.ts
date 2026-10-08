@@ -8,10 +8,24 @@
 
 import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase";
+import type { ScanShots } from "@/components/faceScannerTypes";
+
+export type ScanQuality = { ok: boolean; issue: string | null };
 
 export interface ScanOutcome {
   scanId: string;
+  /** Calitatea pozei, cum a văzut-o modelul (lumină, distanță, claritate). */
+  quality: ScanQuality;
+  /** Ce unghiuri a folosit efectiv analiza (ex. ["front","left","right"]). */
+  anglesUsed: string[];
 }
+
+const FIELD_FOR: Record<keyof ScanShots, string> = {
+  front: "image",
+  left: "image_left",
+  right: "image_right",
+  down: "image_down",
+};
 
 const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK_SCAN === "true";
 
@@ -26,7 +40,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
 
 const SESSION_EXPIRED = "Nu ești autentificat sau sesiunea a expirat. Intră din nou în cont și repetă scanarea.";
 
-async function runEdgeScan(photoUri: string): Promise<ScanOutcome> {
+async function runEdgeScan(shots: ScanShots): Promise<ScanOutcome> {
   // Edge Function-ul cere un token de utilizator. Fără sesiune, invoke() trimite doar cheia anon
   // și funcția răspunde „unauthorized” — mai bine spunem clar de ce.
   const {
@@ -36,16 +50,16 @@ async function runEdgeScan(photoUri: string): Promise<ScanOutcome> {
 
   const form = new FormData();
 
-  if (Platform.OS === "web") {
-    // Pe web, FormData.append cere un Blob/File adevărat — un obiect simplu
-    // e doar stringificat ("[object Object]"), nu trimis ca fișier.
-    // {uri, name, type} de mai jos e o convenție specifică React Native
-    // nativ, pe care un browser real n-o înțelege.
-    const fetched = await fetch(photoUri);
-    const blob = await fetched.blob();
-    form.append("image", blob, "scan.jpg");
-  } else {
-    form.append("image", { uri: photoUri, name: "scan.jpg", type: "image/jpeg" } as unknown as Blob);
+  for (const key of Object.keys(FIELD_FOR) as (keyof ScanShots)[]) {
+    const uri = shots[key];
+    if (!uri) continue;
+    if (Platform.OS === "web") {
+      // Pe web, FormData.append cere un Blob/File adevărat; {uri, name, type} e o convenție doar a React Native nativ.
+      const blob = await (await fetch(uri)).blob();
+      form.append(FIELD_FOR[key], blob, `${key}.jpg`);
+    } else {
+      form.append(FIELD_FOR[key], { uri, name: `${key}.jpg`, type: "image/jpeg" } as unknown as Blob);
+    }
   }
 
   const { data, error } = await supabase.functions.invoke("scan-face", { body: form });
@@ -67,10 +81,14 @@ async function runEdgeScan(photoUri: string): Promise<ScanOutcome> {
     throw new Error(friendly);
   }
   if (!data?.scan_id) throw new Error("Scanarea nu a întors un scan_id");
-  return { scanId: data.scan_id as string };
+  return {
+    scanId: data.scan_id as string,
+    quality: { ok: data.quality?.ok !== false, issue: (data.quality?.issue as string | null) ?? null },
+    anglesUsed: Array.isArray(data.angles_used) ? (data.angles_used as string[]) : ["front"],
+  };
 }
 
-async function runMockScan(_photoUri: string): Promise<ScanOutcome> {
+async function runMockScan(_shots: ScanShots): Promise<ScanOutcome> {
   await new Promise((r) => setTimeout(r, 800));
   const {
     data: { user },
@@ -97,8 +115,8 @@ async function runMockScan(_photoUri: string): Promise<ScanOutcome> {
     { scan_id: scan.id, issue_slug: "hair_loss", severity: 3.2, confidence: 0.74 },
   ]);
   if (issuesError) throw issuesError;
-  return { scanId: scan.id };
+  return { scanId: scan.id, quality: { ok: true, issue: null }, anglesUsed: ["front"] };
 }
 
-export const runScan = (photoUri: string): Promise<ScanOutcome> =>
-  USE_MOCK ? runMockScan(photoUri) : runEdgeScan(photoUri);
+export const runScan = (shots: ScanShots): Promise<ScanOutcome> =>
+  USE_MOCK ? runMockScan(shots) : runEdgeScan(shots);

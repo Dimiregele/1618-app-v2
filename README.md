@@ -54,3 +54,29 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Scanare facială, voce și chestionar (1.618)
+
+### Scanarea
+- **Web** (`FaceScanner.web.tsx`): mesh facial 3D cu 478 de puncte (MediaPipe Face Landmarker, rulat local în browser).
+  Ghidează ca la Face ID: față → profil → celălalt profil → capul în jos (scalp). Fiecare poză se face automat când
+  lumina, distanța, expresia și poziția capului sunt bune. Dacă modelul nu se poate încărca, trecem pe o poză simplă.
+  Camera cere **https** (sau `localhost`); pe telefon deschide build-ul web printr-un link https.
+- **Nativ** (`FaceScanner.tsx`): trei poze cu expo-camera și verificare live de lumină/claritate. Un scan 3D real pe
+  telefon cere un development build cu un detector facial nativ (ARKit / vision-camera); nu rulează în Expo Go.
+- Adâncimea 3D e **estimată** dintr-o cameră obișnuită, nu măsurată cu senzor TrueDepth. Pragurile (lumină, distanță, unghiuri)
+  sunt în `src/lib/faceGeometry.ts` și `FaceScanner.web.tsx` și trebuie calibrate pe dispozitive reale.
+- `scan-face` (Edge Function) primește `image` (față) și, opțional, `image_left`, `image_right`, `image_down`.
+
+### Vocea asistentului
+Funcția `tts` sintetizează replicile fixe ale asistentului și le ține în bucket-ul public `tts-cache` (o singură dată per replică).
+Fără secrete setate, aplicația folosește vocea dispozitivului (expo-speech). Secrete (Supabase → Edge Functions → Secrets):
+- **Gratuit și permis comercial:** `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` (Azure Speech F0, ~500.000 caractere/lună),
+  opțional `TTS_VOICE` (implicit `ro-RO-AlinaNeural`; alternativă `ro-RO-EmilNeural`).
+- **ElevenLabs:** `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`. Planul gratuit ElevenLabs e doar necomercial și cere atribuire;
+  pentru o aplicație cu abonamente e nevoie de un plan plătit.
+Textele personale (rezultatele) se rostesc doar cu vocea dispozitivului, nu se trimit la server.
+
+### Chestionar
+`src/lib/questionnaire.ts` (52 de întrebări, ~28–47 afișate, în funcție de răspunsuri) și `src/lib/profile.ts`, care derivă
+scoruri orientative (stres, somn, fumat, alcool) și semnale de siguranță. Scorurile sunt euristice, **nu clinice**.
