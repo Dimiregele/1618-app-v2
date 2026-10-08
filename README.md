@@ -80,3 +80,7 @@ Textele personale (rezultatele) se rostesc doar cu vocea dispozitivului, nu se t
 ### Chestionar
 `src/lib/questionnaire.ts` (52 de întrebări, ~28–47 afișate, în funcție de răspunsuri) și `src/lib/profile.ts`, care derivă
 scoruri orientative (stres, somn, fumat, alcool) și semnale de siguranță. Scorurile sunt euristice, **nu clinice**.
+
+### Scanarea 3D pe telefon, prin browser (https)
+Scannerul 3D rulează în browserul telefonului, dar camera cere https. Publică build-ul web cu EAS Hosting (cont Expo gratuit):
+`npx eas-cli@latest login`, apoi `npm run deploy:web` (prima dată te întreabă numele subdomeniului). Deschizi linkul `*.expo.app` pe telefon.

@@ -51,6 +51,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "deploy:web": "expo export --platform web && npx eas-cli@latest deploy",
     "lint": "expo lint"
   },
   "private": true
