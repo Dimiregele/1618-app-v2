@@ -48,19 +48,19 @@ const MODEL_URL =
 const LOAD_TIMEOUT_MS = 30000;
 const DETECT_EVERY_MS = 45;
 const LIGHT_EVERY_N = 5;
-const MANUAL_AFTER_MS = 15000;
+const MANUAL_AFTER_MS = 8000;
 const TICKS = 72;
 
 const POSE = {
-  frontYaw: 8,
-  frontPitch: 14,
-  frontRoll: 10,
-  sideMin: 24,
-  sideMax: 55,
-  sidePitch: 22,
-  downMin: 14,
-  downMax: 45,
-  downYaw: 18,
+  frontYaw: 12,
+  frontPitch: 18,
+  frontRoll: 14,
+  sideMin: 20,
+  sideMax: 62,
+  sidePitch: 28,
+  downMin: 12,
+  downMax: 48,
+  downYaw: 22,
 };
 
 type StepId = "front" | "sideA" | "sideB" | "down";
@@ -126,6 +126,9 @@ type Runtime = {
   shots: Partial<Record<"front" | "left" | "right" | "down", string>>;
   holdStart: number | null;
   badSince: number | null;
+  eyesClosedSince: number | null;
+  mouthOpenSince: number | null;
+  blinking: boolean; // ochii sunt închiși chiar acum (clipit): nu facem poza în acel moment
   settleUntil: number;
   stepStartedAt: number;
   lighting: LightingReport | null;
@@ -159,6 +162,9 @@ function newRuntime(): Runtime {
     shots: {},
     holdStart: null,
     badSince: null,
+    eyesClosedSince: null,
+    mouthOpenSince: null,
+    blinking: false,
     settleUntil: 0,
     stepStartedAt: Date.now(),
     lighting: null,
@@ -445,9 +451,18 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
         }
       }
 
+      // Expresia: un clipit sau o mișcare scurtă a gurii NU oprește scanarea. Cerem ochi deschiși / gură închisă
+      // doar dacă problema ține peste o secundă; zâmbetul ușor nu e deloc blocant.
       if (step === "front") {
         const ex = expressionIssues(blend);
-        if (ex.length) return ex[0];
+        const now = Date.now();
+        r.blinking = ex.includes("eyes_closed");
+        r.eyesClosedSince = r.blinking ? (r.eyesClosedSince ?? now) : null;
+        r.mouthOpenSince = ex.includes("mouth_open") ? (r.mouthOpenSince ?? now) : null;
+        if (r.eyesClosedSince !== null && now - r.eyesClosedSince > 1200) return "eyes_closed";
+        if (r.mouthOpenSince !== null && now - r.mouthOpenSince > 800) return "mouth_open";
+      } else {
+        r.blinking = false;
       }
 
       const ay = Math.abs(yaw);
@@ -483,7 +498,7 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
     }
 
     function holdMs(step: StepId) {
-      return step === "front" ? 600 : step === "down" ? 500 : 450;
+      return step === "front" ? 450 : step === "down" ? 400 : 350;
     }
 
     // ───── desenarea suprapunerii ─────
@@ -694,13 +709,14 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
           r.badSince = null;
           if (r.holdStart === null) r.holdStart = now;
           hold = Math.min(1, (now - r.holdStart) / holdMs(step));
-          if (hold >= 1) {
+          // Dacă tocmai clipești, așteptăm să deschizi ochii (poza rămâne „gata”, fără să reiei numărătoarea).
+          if (hold >= 1 && !r.blinking) {
             r.holdStart = null;
             void capture(false);
           }
         } else {
           if (r.badSince === null) r.badSince = now;
-          if (now - r.badSince > 220) r.holdStart = null; // mici sincope nu resetează
+          if (now - r.badSince > 500) r.holdStart = null; // mici sincope nu resetează
           if (r.holdStart !== null) hold = Math.min(1, (now - r.holdStart) / holdMs(step));
         }
       }

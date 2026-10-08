@@ -130,7 +130,7 @@ export function faceBox(lm: Pt[], view: View): Box {
 
 export type FramingIssue = "too_close" | "too_far" | "cut_off" | "off_center";
 
-export const FRAMING = { tooClose: 0.74, tooFar: 0.44, edge: 0.02, centerX: 0.1, centerY: 0.12 };
+export const FRAMING = { tooClose: 0.82, tooFar: 0.36, edge: 0.0, centerX: 0.16, centerY: 0.18 };
 
 /** `relaxedCenter`: la poziții din profil fața se deplasează natural, deci toleranța la centrare crește. */
 export function checkFraming(box: Box, relaxedCenter = false): FramingIssue | null {
@@ -198,7 +198,7 @@ export type LightingReport = {
   issues: LightingIssue[];
 };
 
-export const LIGHTING = { dark: 60, bright: 215, clipped: 0.12, backlitGap: 55, backlitFace: 120, asym: 0.3 };
+export const LIGHTING = { dark: 50, bright: 228, clipped: 0.2, backlitGap: 70, backlitFace: 110, asym: 0.45 };
 
 function lumAt(d: ArrayLike<number>, i: number) {
   return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -308,7 +308,7 @@ function patchStatsRect(img: ImageDataLike, x0: number, y0: number, x1: number, 
 
 /** Imaginea e „mișcată” dacă claritatea a scăzut mult față de cea mai bună din sesiune (prag adaptiv, fără calibrare pe dispozitiv). */
 export function isBlurry(sharpness: number, bestSoFar: number): boolean {
-  return bestSoFar > 0 && sharpness < bestSoFar * 0.4;
+  return bestSoFar > 0 && sharpness < bestSoFar * 0.3;
 }
 
 // ───────────── expresie ─────────────
@@ -320,7 +320,7 @@ export function expressionIssues(blend: { categoryName: string; score: number }[
   const get = (name: string) => blend.find((c) => c.categoryName === name)?.score ?? 0;
   const out: ExpressionIssue[] = [];
   if ((get("eyeBlinkLeft") + get("eyeBlinkRight")) / 2 >= 0.5) out.push("eyes_closed");
-  if (get("jawOpen") >= 0.25) out.push("mouth_open");
-  if ((get("mouthSmileLeft") + get("mouthSmileRight")) / 2 >= 0.4) out.push("smiling");
+  if (get("jawOpen") >= 0.4) out.push("mouth_open");
+  if ((get("mouthSmileLeft") + get("mouthSmileRight")) / 2 >= 0.6) out.push("smiling");
   return out;
 }
