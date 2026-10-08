@@ -24,7 +24,6 @@ const FIELD_FOR: Record<keyof ScanShots, string> = {
   front: "image",
   left: "image_left",
   right: "image_right",
-  down: "image_down",
 };
 
 const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK_SCAN === "true";

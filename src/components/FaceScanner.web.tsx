@@ -2,7 +2,7 @@
 //
 // Cum funcționează:
 //  - modelul urmărește fața în timp real și dă puncte 3D + poziția capului (yaw/pitch/roll) + expresia;
-//  - ghidăm utilizatorul ca la Face ID: față → o parte → cealaltă parte → (opțional) capul în jos pentru scalp;
+//  - ghidăm utilizatorul ca la Face ID: față → o parte → cealaltă parte (scalpul se află din chestionar, nu din poze);
 //  - fiecare poziție se capturează AUTOMAT când lumina, încadrarea, expresia și poziția sunt bune și imaginea e stabilă;
 //  - fiecare poză e decupată portret în jurul feței, ca să ocupe cât mai mult din imaginea analizată.
 //
@@ -58,12 +58,9 @@ const POSE = {
   sideMin: 20,
   sideMax: 62,
   sidePitch: 28,
-  downMin: 12,
-  downMax: 48,
-  downYaw: 22,
 };
 
-type StepId = "front" | "sideA" | "sideB" | "down";
+type StepId = "front" | "sideA" | "sideB";
 type Tone = "bad" | "info" | "ok";
 
 const MSG = {
@@ -87,8 +84,6 @@ const MSG = {
   turn_left: { text: "Întoarce încet capul spre stânga ta.", spoken: "Întoarce încet capul spre stânga ta, cam 45 de grade.", tone: "info" },
   turn_right: { text: "Întoarce încet capul spre dreapta ta.", spoken: "Acum întoarce încet capul spre dreapta ta, cam 45 de grade.", tone: "info" },
   turn_back: { text: "Prea mult, revino puțin.", spoken: "Prea mult. Întoarce puțin capul înapoi.", tone: "info" },
-  tilt_down: { text: "Înclină încet capul în jos.", spoken: "Acum înclină încet capul în jos, ca să văd linia părului.", tone: "info" },
-  tilt_back: { text: "Prea mult, ridică puțin capul.", spoken: "Prea mult. Ridică puțin capul.", tone: "info" },
   blurry: { text: "Stai nemișcat…", spoken: "", tone: "info" },
   hold: { text: "Perfect, stai nemișcat.", spoken: "Perfect, stai nemișcat.", tone: "ok" },
   settling: { text: "Gata! Încă puțin…", spoken: "", tone: "ok" },
@@ -101,7 +96,6 @@ const STEP_TITLE: Record<StepId, string> = {
   front: "Din față",
   sideA: "Profil",
   sideB: "Celălalt profil",
-  down: "Capul în jos",
 };
 
 // ───────────── tipuri interne ─────────────
@@ -116,14 +110,13 @@ type Ui = {
   value: number | null; // valoarea afișată pe indicator (grade)
   faceSeen: boolean;
   manual: boolean; // arată butonul „Fă poza acum”
-  canSkip: boolean;
 };
 
 type Runtime = {
   steps: StepId[];
   stepIdx: number;
   sideASign: number;
-  shots: Partial<Record<"front" | "left" | "right" | "down", string>>;
+  shots: Partial<Record<"front" | "left" | "right", string>>;
   holdStart: number | null;
   badSince: number | null;
   eyesClosedSince: number | null;
@@ -156,7 +149,7 @@ type Runtime = {
 
 function newRuntime(): Runtime {
   return {
-    steps: ["front", "sideA", "sideB", "down"],
+    steps: ["front", "sideA", "sideB"],
     stepIdx: 0,
     sideASign: 0,
     shots: {},
@@ -216,12 +209,10 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
     value: null,
     faceSeen: false,
     manual: false,
-    canSkip: false,
   });
 
   const modeRef = useRef<Mode>("loading");
   const captureRef = useRef<(force: boolean) => void>(() => {});
-  const skipRef = useRef<() => void>(() => {});
 
   // ───── voce: mesajele stabile, fără repetări obositoare ─────
   useEffect(() => {
@@ -287,8 +278,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
       r.bestSharp = 0;
       r.stepStartedAt = Date.now();
       r.settleUntil = Date.now() + 1100;
-      // pasul „în jos” cere pitch din matrice; fără ea îl sărim
-      if (r.steps[r.stepIdx] === "down" && r.lastSource !== "matrix") r.stepIdx++;
       if (r.stepIdx >= r.steps.length) finish();
     }
 
@@ -297,7 +286,7 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
       r.done = true;
       const shots = r.shots;
       if (!shots.front) return;
-      const out: ScanShots = { front: shots.front, left: shots.left, right: shots.right, down: shots.down };
+      const out: ScanShots = { front: shots.front, left: shots.left, right: shots.right };
       const poses = Object.values(out).filter(Boolean).length;
       cleanupMedia();
       onCompleteRef.current(out, {
@@ -394,8 +383,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
         } else if (step === "sideB") {
           const s = r.sideASign ? -r.sideASign : -1;
           r.shots[s > 0 ? "left" : "right"] = url;
-        } else {
-          r.shots.down = url;
         }
         if (force) r.forced = true;
         try {
@@ -424,12 +411,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
 
     captureRef.current = (force) => {
       void capture(force);
-    };
-    skipRef.current = () => {
-      if (currentStep() === "down") {
-        r.stepIdx = r.steps.length;
-        finish();
-      }
     };
 
     // ───── evaluarea pașilor ─────
@@ -484,13 +465,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
           if (Math.abs(pitch) > POSE.sidePitch) return "pose_pitch";
           break;
         }
-        case "down": {
-          const rel = pitch - r.frontPitch;
-          if (ay > POSE.downYaw) return "pose_front";
-          if (rel > -POSE.downMin) return "tilt_down";
-          if (rel < -POSE.downMax) return "tilt_back";
-          break;
-        }
       }
 
       if (isBlurry(L.sharpness, r.bestSharp)) return "blurry";
@@ -498,7 +472,7 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
     }
 
     function holdMs(step: StepId) {
-      return step === "front" ? 450 : step === "down" ? 400 : 350;
+      return step === "front" ? 450 : 350;
     }
 
     // ───── desenarea suprapunerii ─────
@@ -660,7 +634,7 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
         r.holdStart = null;
         draw(ctx, null, null, nowPerf, 0, overallBase);
         setMsg("no_face");
-        pushUi({ msg: "no_face", step, hold: 0, overall: overallBase, value: null, faceSeen: false, manual: false, canSkip: step === "down" });
+        pushUi({ msg: "no_face", step, hold: 0, overall: overallBase, value: null, faceSeen: false, manual: false });
         return;
       }
       const lm = raw as unknown as Pt[];
@@ -725,7 +699,7 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
       const overall = Math.min(1, overallBase + (hold * 0.9) / stepsTotal);
       draw(ctx, lm, view, nowPerf, hold, overall);
 
-      const value = step === "down" ? pitch - r.frontPitch : yaw;
+      const value = yaw;
       const stuckFor = now - r.stepStartedAt;
       if (now - lastFrameUi > 100) {
         lastFrameUi = now;
@@ -738,7 +712,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
             value,
             faceSeen: true,
             manual: stuckFor > MANUAL_AFTER_MS && !checkFraming(box, true),
-            canSkip: step === "down",
           },
           true,
         );
@@ -842,7 +815,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
   const zone = useMemo(() => {
     // indicator în oglindă: yaw pozitiv (stânga ta) apare în stânga ecranului
     if (ui.step === "front") return [{ from: -POSE.frontYaw, to: POSE.frontYaw }];
-    if (ui.step === "down") return [{ from: POSE.downMin, to: POSE.downMax }];
     const a = R.current.sideASign;
     if (ui.step === "sideB" && a) {
       // al doilea profil e de partea opusă primului
@@ -856,13 +828,12 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
     ];
   }, [ui.step]);
 
-  const meterRange = ui.step === "down" ? 50 : 70;
-  const meterValue = ui.value === null ? null : ui.step === "down" ? -ui.value : ui.value;
-  // axa: valoarea mare pozitivă (stânga ta / capul în jos) se desenează în stânga indicatorului, ca într-o oglindă
+  const meterRange = 70;
+  const meterValue = ui.value;
+  // axa: valoarea mare pozitivă (stânga ta) se desenează în stânga indicatorului, ca într-o oglindă
   const pos = (v: number) => `${50 - (Math.max(-meterRange, Math.min(meterRange, v)) / meterRange) * 50}%` as const;
 
   const onShutter = useCallback(() => captureRef.current(true), []);
-  const onSkip = useCallback(() => skipRef.current(), []);
 
   const videoEl = createElement("video", {
     ref: videoRef,
@@ -968,7 +939,6 @@ export function FaceScanner({ onComplete, onCancel }: FaceScannerProps) {
         <View style={styles.actions}>
           {mode === "basic" && <Button label="Fă poza" onPress={onShutter} />}
           {mode === "3d" && ui.manual && <Button label="Fă poza acum" variant="secondary" onPress={onShutter} />}
-          {mode === "3d" && ui.canSkip && <Button label="Sari peste" variant="ghost" onPress={onSkip} />}
         </View>
       </View>
     </View>

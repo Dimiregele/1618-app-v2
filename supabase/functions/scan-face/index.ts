@@ -4,8 +4,11 @@
 //   image        — fața din față (obligatoriu, ca până acum)
 //   image_left   — profil, utilizatorul și-a întors capul spre stânga lui   (opțional)
 //   image_right  — profil, spre dreapta lui                                  (opțional)
-//   image_down   — capul înclinat în jos, pentru scalp / linia părului       (opțional)
 //
+// Modelul acceptă cel mult 3 imagini într-o cerere, deci folosim doar aceste 3 unghiuri (față + 2 profiluri).
+// Scalpul / căderea părului NU se judecă din poze: se află din chestionar. Un câmp `image_down` trimis de un client
+// vechi este ignorat.
+
 // Un client vechi care trimite doar `image` funcționează la fel ca înainte.
 // Răspuns: { scan_id, quality: {ok, issue}, issues: [...], angles_used: ["front", ...] }
 // Imaginile nu se salvează nicăieri; se trimit doar la modelul de analiză.
@@ -21,6 +24,9 @@ const KNOWN_SLUGS = [
   "texture", "oiliness", "dryness", "eye_bags", "age_spots", "hair_loss",
 ];
 
+// căderea părului nu se judecă din poza feței (scalpul nu se vede); vine din chestionar
+const SKIN_SLUGS = KNOWN_SLUGS.filter((s) => s !== "hair_loss");
+
 const QUALITY_ISSUES = [
   "prea_intunecat", "prea_luminos", "fata_prea_aproape", "fata_prea_departe", "fata_neclara",
 ];
@@ -30,23 +36,22 @@ const ANGLES = [
   { field: "image", key: "front", label: "FAȚĂ (din față)", hint: "frunte, obraji, nas, bărbie, zona ochilor" },
   { field: "image_left", key: "left", label: "PROFIL STÂNGA", hint: "obrazul stâng, maxilar, tâmplă, textura pielii pe lateral" },
   { field: "image_right", key: "right", label: "PROFIL DREAPTA", hint: "obrazul drept, maxilar, tâmplă, textura pielii pe lateral" },
-  { field: "image_down", key: "down", label: "CAP ÎNCLINAT ÎN JOS", hint: "scalpul, linia părului, vârful capului" },
 ] as const;
 
 const PROMPT = `Ești un asistent de analiză vizuală pentru o aplicație de îngrijire personală (NU diagnostic medical).
-Primești una sau mai multe poze ale ACEEAȘI persoane, fiecare cu eticheta ei (față, profil stânga, profil dreapta, cap înclinat în jos). Folosește-le TOATE împreună: o problemă văzută din mai multe unghiuri e mai sigură decât una văzută doar dintr-unul.
+Primești una sau mai multe poze ale ACEEAȘI persoane, fiecare cu eticheta ei (față, profil stânga, profil dreapta). Folosește-le TOATE împreună: o problemă văzută din mai multe unghiuri e mai sigură decât una văzută doar dintr-unul.
 
 PASUL 1 — CALITATEA POZEI. Evaluează în primul rând poza din FAȚĂ dacă e tehnic potrivită pt. o scanare facială:
 - lumina e suficientă și echilibrată (nu prea întunecată, nu suprasaturată)
 - fața e la o distanță potrivită (nu taie din cadru de aproape, nu e prea mică în poză de departe)
 - fața e clară, vizibilă, nu neclară/mișcată/obstrucționată
-Pozele de profil și cele cu capul în jos sunt prin natura lor mai puțin ideale; nu le penaliza pentru unghi.
+Pozele de profil sunt prin natura lor mai puțin ideale; nu le penaliza pentru unghi.
 
-PASUL 2 — ANALIZA. Examinează SISTEMATIC, zonă cu zonă (frunte, obraji, bărbie, zona ochilor, tâmple, scalp/linia părului dacă e vizibilă) și evaluează FIECARE dintre aceste categorii:
-${KNOWN_SLUGS.join(", ")}
+PASUL 2 — ANALIZA. Examinează SISTEMATIC, zonă cu zonă (frunte, obraji, bărbie, zona ochilor, tâmple) și evaluează FIECARE dintre aceste categorii:
+${SKIN_SLUGS.join(", ")}
 
 Pentru fiecare, un scor de severitate 0-10 (0 = deloc vizibil, 1-3 = ușor, 4-6 = moderat, 7-10 = sever). Fii decis — nu te feri de scoruri peste 5 dacă ce vezi chiar justifică asta. Include DOAR categoriile cu scor >= 2.
-"hair_loss" doar dacă scalpul/linia părului se văd clar (mai ales în poza cu capul în jos); omite-l dacă nu ești sigur. NU pune diagnostic medical — dacă vezi ceva neobișnuit, nu-l clasifica, doar adaugă o "note" generică de genul "merită verificat de un dermatolog".
+NU evalua părul sau căderea părului (nu e subiectul acestei scanări). NU pune diagnostic medical — dacă vezi ceva neobișnuit, nu-l clasifica, doar adaugă o "note" generică de genul "merită verificat de un dermatolog".
 Nu inventa: dacă o zonă nu se vede în nicio poză, nu o evalua.
 
 Răspunde STRICT ca JSON, fără alt text, exact în formatul:
@@ -142,8 +147,7 @@ Deno.serve(async (req) => {
 
     const issues = (parsed.issues ?? [])
       .filter((i) => i && KNOWN_SLUGS.includes(i.slug) && typeof i.severity === "number")
-      // hair_loss are sens doar dacă am avut o poză cu scalpul
-      .filter((i) => i.slug !== "hair_loss" || anglesUsed.includes("down") || anglesUsed.length === 1)
+      .filter((i) => SKIN_SLUGS.includes(i.slug))
       .map((i) => ({
         issue_slug: i.slug,
         severity: Math.min(10, Math.max(0, Number(i.severity.toFixed(2)))),

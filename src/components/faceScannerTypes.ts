@@ -4,7 +4,6 @@ export type ScanShots = {
   front: string;
   left?: string; // profil: utilizatorul și-a întors capul spre STÂNGA lui
   right?: string;
-  down?: string; // capul înclinat în jos (scalp / linia părului), doar în modul 3D
 };
 
 export type ScanMeta = {

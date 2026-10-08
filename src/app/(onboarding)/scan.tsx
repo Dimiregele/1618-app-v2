@@ -43,7 +43,6 @@ const ANGLE_LABEL: { key: keyof ScanShots; label: string }[] = [
   { key: "front", label: "Față" },
   { key: "left", label: "Stânga" },
   { key: "right", label: "Dreapta" },
-  { key: "down", label: "Scalp" },
 ];
 
 function buzz(kind: "light" | "success" = "light") {
@@ -161,7 +160,7 @@ export default function ScanScreen() {
           <Text style={type.h1}>Scanare facială</Text>
           <Text style={type.bodyMuted}>
             {IS_WEB
-              ? "Camera urmărește fața ta în timp real cu un mesh 3D de 478 de puncte și te ghidează: din față, apoi din profil, apoi cu capul în jos pentru scalp. Pozele se fac automat când lumina, distanța și poziția sunt bune."
+              ? "Camera urmărește fața ta în timp real cu un mesh 3D de 478 de puncte și te ghidează: din față, apoi din profil, de ambele părți. Pozele se fac automat când lumina, distanța și poziția sunt bune."
               : "Facem trei poze (din față și din profil), pe care le verificăm pe loc: lumină, claritate și încadrare."}
           </Text>
         </Animated.View>
@@ -266,7 +265,7 @@ function AnalyzeBeam() {
 const ANALYZE_STEPS = [
   "Trimitem scanarea în siguranță",
   "Analizăm textura și tonul pielii",
-  "Verificăm scalpul și linia părului",
+  "Verificăm conturul feței și zona ochilor",
   "Evaluăm zona ochilor",
   "Pregătim recomandările",
 ];
