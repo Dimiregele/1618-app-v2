@@ -69,12 +69,15 @@ Join our community of developers creating universal apps.
 - `scan-face` (Edge Function) primește `image` (față) și, opțional, `image_left`, `image_right`, `image_down`.
 
 ### Vocea asistentului
-Funcția `tts` sintetizează replicile fixe ale asistentului și le ține în bucket-ul public `tts-cache` (o singură dată per replică).
-Fără secrete setate, aplicația folosește vocea dispozitivului (expo-speech). Secrete (Supabase → Edge Functions → Secrets):
-- **Gratuit și permis comercial:** `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` (Azure Speech F0, ~500.000 caractere/lună),
-  opțional `TTS_VOICE` (implicit `ro-RO-AlinaNeural`; alternativă `ro-RO-EmilNeural`).
-- **ElevenLabs:** `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`. Planul gratuit ElevenLabs e doar necomercial și cere atribuire;
-  pentru o aplicație cu abonamente e nevoie de un plan plătit.
+Funcția `tts` sintetizează replicile fixe ale asistentului și le ține în bucket-ul public `tts-cache` (o singură dată per replică;
+tot catalogul are ~5.000 de caractere). Fără secrete setate, aplicația folosește vocea dispozitivului (expo-speech).
+Secrete (Supabase → Edge Functions → Secrets), la alegere:
+- **ElevenLabs** (voce mai naturală): `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, opțional `ELEVENLABS_MODEL`
+  (implicit `eleven_multilingual_v2`; `eleven_flash_v2_5` costă pe jumătate). Planul gratuit (10.000 credite/lună) merge pentru
+  dezvoltare și teste, dar **nu are licență comercială** și cere atribuire; pentru lansare cu abonamente e nevoie de planul Starter.
+  Dacă ElevenLabs refuză o voce din bibliotecă pe planul gratuit, alege una din vocile implicite.
+- **Azure Speech** (alternativă): `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`, opțional `TTS_VOICE`.
+Dacă sunt setate ambele, câștigă ElevenLabs.
 Textele personale (rezultatele) se rostesc doar cu vocea dispozitivului, nu se trimit la server.
 
 ### Chestionar
